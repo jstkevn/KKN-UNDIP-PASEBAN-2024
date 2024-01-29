@@ -1,6 +1,8 @@
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
+#include <DNSServer.h>
+#include <ESP8266mDNS.h>
 #include "HTML.h"
 
 //AP
@@ -12,7 +14,7 @@ ESP8266WebServer server(80);
 #include "CTBot.h"
 CTBot bot;
 TBMessage msg;
-String token = "6384928892:AAF3kAr3I0b4JT3SrJSkLepuYc2dbNIGxWs";
+String token = "telegram TOKEN";
 
 //inisialisasi loadcell hx711
 #include "HX711.h"
@@ -47,13 +49,12 @@ void handleForm(){
   WiFi.begin(ssidNew, passNew);
   while (WiFi.status() != WL_CONNECTED){
     delay(500);
-    Serial.print(".");
+    P.print("Tunggu");
   }
 }
 
 void setup() {
   Serial.begin(115200);
-
   WiFi.softAP(ssid, password);
   IPAddress IP = WiFi.softAPIP();
   Serial.println("");
@@ -63,55 +64,66 @@ void setup() {
   server.on("/action_page", handleForm);
   server.begin(); 
   delay(1000);
+  MDNS.begin("sobatmiring");
   
   bot.wifiConnect(ssidNew, passNew);
   bot.setTelegramToken(token);
   P.begin();
-  analogWrite(5,255);
+  pinMode(5,OUTPUT);
+  digitalWrite(5,HIGH);
   delay(150);
-  analogWrite(5,0);
+  digitalWrite(5,LOW);
   
   P.print("  KKN");
   delay(1000);
   P.print(" UNDIP");
   delay(1000);
 
-  Serial.println(__FILE__);
-  Serial.print("LIBRARY VERSION: ");
-  Serial.println(HX711_LIB_VERSION);
-  Serial.println();
+//  Serial.println(__FILE__);
+//  Serial.print("LIBRARY VERSION: ");
+//  Serial.println(HX711_LIB_VERSION);
+//  Serial.println();
   scale.begin(dataPin, clockPin);
   scale.set_scale(226.44);
   scale.tare(20);
 }
 
-void loop() {
+void buzz(){
+    digitalWrite(5, HIGH);
+    delay(500);
+    digitalWrite(5, LOW);
+    delay(500);
+  }
+
+void dns(){
   if(ssidNew == ""){
     server.handleClient();
-  } else {
-    Serial.println("connect");
-    delay(1000);
+  } 
+  MDNS.update();
   }
-  
+
+void loop() {
+  dns();
   if (scale.is_ready())
   {
-    float sensor = 0.0;
+    float sensor = 0;
     sensor = (scale.get_units(2));
-    float berat = 0.0;
+    float berat = 0;
     berat = sensor/1000;
     float abs_berat = abs(berat);
     delay(100);
-    P.print(abs_berat,1);
+    char isi[6];
+    dtostrf(abs_berat,3,1,isi);
+    char absberat[10];
+    sprintf(absberat,isi);
+    P.print((String)absberat + " Kg");
     
     if(abs_berat >= 8.0){
       P.print(" OVER");
       delay(1000);
-      P.print(abs_berat);
+      buzz();
+      P.print((String)absberat + " Kg");
       delay(500);
-      analogWrite(5, 255);
-      delay(500);
-      analogWrite(5, 0);
-      delay(500);    
     }
 
   //  ini untuk tele
@@ -119,14 +131,17 @@ void loop() {
     if (msg.text.equalsIgnoreCase("/cekstatus")) {
       bot.sendMessage(msg.sender.id, (String)"Berat sampah : " + float(abs_berat) + (String)" Kg");
       }
-    if (msg.text.equalsIgnoreCase("/botol")) {
+    else if (msg.text.equalsIgnoreCase("/botol")) {
       bot.sendMessage(msg.sender.id, "Anda memilih jenis sampah botol yang terdapat pada timbangan. Berikut saran pengolahan sampah botol agar memiliki nilai guna yang tinggi \nhttps://www.youtube.com/watch?v=ogE3n_KdYfg");
       }
-    if (msg.text.equalsIgnoreCase("/kaleng")) {
+    else if (msg.text.equalsIgnoreCase("/kaleng")) {
       bot.sendMessage(msg.sender.id, "Anda memilih jenis sampah kaleng yang terdapat pada timbangan. Berikut saran pengolahan sampah botol agar memiliki nilai guna yang tinggi \nhttps://www.youtube.com/watch?v=u4m9C03KLIE");
       }
-    if (msg.text.equalsIgnoreCase("/kertas")) {
+    else if (msg.text.equalsIgnoreCase("/kertas")) {
       bot.sendMessage(msg.sender.id, "Anda memilih jenis sampah kertas yang terdapat pada timbangan. Berikut saran pengolahan sampah botol agar memiliki nilai guna yang tinggi \nhttps://www.youtube.com/watch?v=7h7Xh-c4KJ0");
+      }
+    else{
+      bot.sendMessage(msg.sender.id, "Maaf keywords tidak sesuai");
       }
    }
   }
